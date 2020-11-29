@@ -78,6 +78,10 @@ namespace DbfTests
 
             var date = ((double)dataRow[ColumnDate]).ToString();
             string timestring = $"0000{dataRow[ColumnTime]}";
+
+            //this is where counter for min date was placed
+            //if (date == "1070106" && timestring == "00001300")
+
             var time = timestring.Substring(timestring.Length - 4);
             DateTime timestamp = DateTime.ParseExact($"{date}{time}", "yyyMMddHHmm", CultureInfo.InvariantCulture);
             timestamp = timestamp.AddYears(1900);

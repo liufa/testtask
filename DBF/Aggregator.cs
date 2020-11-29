@@ -21,17 +21,22 @@ namespace DbfTestTask
 
             //Instead of getting 27 values of min date 633036852000000000, Assert.AreEqual(27, outputs[0].Values.Count); I am getting only one.
             //The bit of code below shows it, so ether test data is incorrect, or I am missing something and likely failed the test at this point.
+            //I had also added  counter to DbfReader that should increment on reading the min value, it doesn't seem read 27 times either, only once.
+            //I have also imported DBF files into MSSQL database as tables and wrote a unionALL query that finds only single minimum record.
+            //Added backup and scripts for your inspection into testtask\MergedDbfToMSSQL
 
-            //So this bit normally wouldn't be here.
-            int counter = 0;
-            foreach (var fileContents in result)
-            {
-                foreach (var row in fileContents)
-                {
-                    if (row.Timestamp.Ticks == 633036852000000000)
-                        counter++;
-                }
-            }
+            //My guess for a reason is when adding commit to github not all dbf were committed. 
+
+            //So this bit normally wouldn't be here, please uncomment to check.
+            //int counter = 0;
+            //foreach (var fileContents in result)
+            //{
+            //    foreach (var row in fileContents)
+            //    {
+            //        if (row.Timestamp.Ticks == 633036852000000000)
+            //            counter++;
+            //    }
+            //}
 
             return result;
         }

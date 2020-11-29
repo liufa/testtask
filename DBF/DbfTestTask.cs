@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using DbfTestTask;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DbfTests
@@ -15,21 +17,31 @@ namespace DbfTests
             const string RootDir = @".\Data";
             const string RelevantFileName = "128.dbf";
 
+
             // TODO read all RelevantFileName files recursively from RootDir (will be copied on build)
             // use DbfReader to read them and extract all DataValues
             // here an example call for one file:
-            var reader = new DbfReader();
-            var values = reader.ReadValues(@".\Data\ELEKTRO\E01\E600DI01\128.dbf");
 
+            var aggregator = new Aggregator();
+            var fileList = aggregator.GetDbfFileListFromBaseDir(RootDir, RelevantFileName);
+            Assert.IsTrue(fileList.Any());
+            aggregator.AddHeadersToOutputRow(fileList);
+            //  var reader = new DbfReader();
+            //  var values = reader.ReadValues(@".\Data\ELEKTRO\E01\E600DI01\128.dbf");
+            var contents = aggregator.ReadDbfFiles(fileList);
             // put all DataValues into ONE ordered (by timestamp) list of OutputRow (each timestamp shall exist only once, each file should be like a column)
             // the OutputRow has 2 lists: 1 static one for the headers (directory path of file) and one for the values (values of all files (same timestamp) must be merged into one OutputRow)
-            var outputs = new List<OutputRow>();
+
+
+            var outputs = aggregator.MergeOrderAndTransformDbfContents(contents).ToList();
 
             // if there is time left, improve example where you think it isn't good enough
 
             // the following asserts should pass
             Assert.AreEqual(25790, outputs.Count);
             Assert.AreEqual(27, OutputRow.Headers.Count);
+
+
             Assert.AreEqual(27, outputs[0].Values.Count);
             Assert.AreEqual(27, outputs[11110].Values.Count);
             Assert.AreEqual(27, outputs[25789].Values.Count);

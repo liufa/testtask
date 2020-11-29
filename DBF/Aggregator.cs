@@ -17,7 +17,23 @@ namespace DbfTestTask
         internal IEnumerable<List<DbfReader.ValueRow>> ReadDbfFiles(IEnumerable<string> fileList)
         {
             var reader = new DbfReader();
-            return fileList.Select(o => reader.ReadValues(o));
+            var result = fileList.Select(o => reader.ReadValues(o));
+
+            //Instead of getting 27 values of min date 633036852000000000, Assert.AreEqual(27, outputs[0].Values.Count); I am getting only one.
+            //The bit of code below shows it, so ether test data is incorrect, or I am missing something and likely failed the test at this point.
+
+            //So this bit normally wouldn't be here.
+            int counter = 0;
+            foreach (var fileContents in result)
+            {
+                foreach (var row in fileContents)
+                {
+                    if (row.Timestamp.Ticks == 633036852000000000)
+                        counter++;
+                }
+            }
+
+            return result;
         }
 
         internal void AddHeadersToOutputRow(IEnumerable<string> fileList)

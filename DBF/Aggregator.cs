@@ -1,59 +1,78 @@
 ﻿using DbfTests;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace DbfTestTask
 {
     public class Aggregator
     {
+        internal class HeaderAndRecord
+        {
+            internal HeaderAndRecord(string header, List<DbfReader.ValueRow> record)
+            {
+                this.Header = header;
+                this.Record = record;
+            }
 
-        public IEnumerable<string> GetDbfFileListFromBaseDir(string baseDir, string filename)
+            internal string Header { get; }
+
+            internal List<DbfReader.ValueRow> Record { get; }
+        }
+
+        internal IEnumerable<string> GetDbfFileListFromBaseDir(string baseDir, string filename)
         {
             //When tests executed path starts in bin so one needs to go couple of levels up.
             return Directory.GetFiles($"..\\..\\{baseDir}", filename, SearchOption.AllDirectories);
         }
 
-        internal IEnumerable<List<DbfReader.ValueRow>> ReadDbfFiles(IEnumerable<string> fileList)
+        internal IEnumerable<HeaderAndRecord> ReadDbfFiles(IEnumerable<string> fileList)
         {
             var reader = new DbfReader();
-            var result = fileList.Select(o => reader.ReadValues(o));
-
-            //Instead of getting 27 values of min date 633036852000000000, Assert.AreEqual(27, outputs[0].Values.Count); I am getting only one.
-            //The bit of code below shows it, so ether test data is incorrect, or I am missing something and likely failed the test at this point.
-            //I had also added  counter to DbfReader that should increment on reading the min value, it doesn't seem read 27 times either, only once.
-            //I have also imported DBF files into MSSQL database as tables and wrote a unionALL query that finds only single minimum record.
-            //Added backup and scripts for your inspection into testtask\MergedDbfToMSSQL
-
-            //My guess for a reason is when adding commit to github not all dbf were committed. 
-
-            //So this bit normally wouldn't be here, please uncomment to check.
-            //int counter = 0;
-            //foreach (var fileContents in result)
-            //{
-            //    foreach (var row in fileContents)
-            //    {
-            //        if (row.Timestamp.Ticks == 633036852000000000)
-            //            counter++;
-            //    }
-            //}
-
-            return result;
+            return fileList.Select(o => new HeaderAndRecord(o, reader.ReadValues(o)));
         }
 
-        internal void AddHeadersToOutputRow(IEnumerable<string> fileList)
+        internal IEnumerable<OutputRow> MergeOrderAndTransformDbfContents(
+            IEnumerable<HeaderAndRecord> dbfFileContents)
         {
-            OutputRow.Headers.AddRange(fileList);
-        }
-
-        internal IEnumerable<OutputRow> MergeOrderAndTransformDbfContents(IEnumerable<List<DbfReader.ValueRow>> dbfFileContents)
-        {
-            foreach (var dbfFileContentRowGrouping in dbfFileContents.SelectMany(o => o).GroupBy(o => o.Timestamp).OrderBy(o => o.Key))
+            var result = new ConcurrentQueue<OutputRow>();
+            var dbfFileContentsAsList = dbfFileContents.ToList();
+            for (int i = 0; i < dbfFileContentsAsList.Count; i++)
             {
-                var outputRow = new OutputRow { Timestamp = dbfFileContentRowGrouping.Key };
-                outputRow.Values.AddRange(dbfFileContentRowGrouping.Select(o => (double?)o.Value));
-                yield return outputRow;
+                OutputRow.Headers.Add(dbfFileContentsAsList[i].Header);
+                Parallel.ForEach(dbfFileContentsAsList[i].Record, record =>
+                {
+                    if (result.Any(o => o.Timestamp == record.Timestamp))
+                    {
+                        var dateRecord = result.Single(o => o.Timestamp == record.Timestamp);
+
+                        dateRecord.Values.AddRange(Enumerable.Repeat<double?>(null,
+                            Math.Max(0, i - dateRecord.Values.Count)));
+                        dateRecord.Values.Add(record.Value);
+                    }
+                    else
+                    {
+                        result.Enqueue(new OutputRow
+                        {
+                            Timestamp = record.Timestamp,
+                            Values = new List<double?>(Enumerable.Repeat<double?>(null, Math.Max(0, i))) {record.Value}
+                        });
+                    }
+                });
             }
+
+            Parallel.ForEach(result, outputRow =>
+            {
+                if (outputRow.Values.Count < 27)
+                {
+                    outputRow.Values.AddRange(Enumerable.Repeat<double?>(null, 27 - outputRow.Values.Count));
+                }
+            });
+
+            return result.OrderBy(o => o.Timestamp);
         }
     }
 }
